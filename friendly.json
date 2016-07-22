@@ -1,0 +1,19 @@
+{
+    "appIDs": {
+        "0x10A1": "Weather",
+        "0x0573": "TxStatus"
+    },
+
+    "msgTypes": {
+        "Weather": {
+            "0x0001": "Reading"
+        },
+        "TxStatus": {
+            "0x0001": "Update"
+        }
+    },
+
+    "xbees": {
+        "0x0013A20040B3F1F5": "Study"
+    }
+}

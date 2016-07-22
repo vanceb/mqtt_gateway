@@ -1,0 +1,74 @@
+{
+"version": 1,
+"disable_existing_loggers": false,
+"formatters": {
+    "application_log_formatter": {
+        "format": "%(asctime)s %(name)s-%(levelname)s: %(message)s"
+    },
+    "data_log_formatter": {
+        "format": "%(message)s"
+    }
+},
+
+"handlers": {
+    "console": {
+        "class": "logging.StreamHandler",
+        "level": "DEBUG",
+        "formatter": "application_log_formatter",
+        "stream": "ext://sys.stdout"
+    },
+
+    "application_log_handler": {
+        "class": "logging.handlers.TimedRotatingFileHandler",
+        "level": "WARNING",
+        "formatter": "application_log_formatter",
+        "filename": "logs/datalogger.log",
+        "when": "D",
+        "interval": 1,
+        "backupCount": 0,
+        "encoding": "utf8",
+        "delay": false
+    },
+
+    "txStatus_handler": {
+        "class": "logging.handlers.TimedRotatingFileHandler",
+        "level": "INFO",
+        "formatter": "data_log_formatter",
+        "filename": "logs/txStatus.log",
+        "when": "D",
+        "interval": 1,
+        "backupCount": 0,
+        "encoding": "utf8",
+        "delay": false
+    },
+    "weather_handler": {
+        "class": "logging.handlers.TimedRotatingFileHandler",
+        "level": "INFO",
+        "formatter": "data_log_formatter",
+        "filename": "logs/weather.log",
+        "when": "D",
+        "interval": 1,
+        "backupCount": 0,
+        "encoding": "utf8",
+        "delay": false
+    }
+},
+
+"loggers": {
+    "Weather.Reading.Study": {
+        "level": "INFO",
+        "handlers": ["weather_handler"],
+        "propagate": false
+    },
+    "TxStatus.Update.Study": {
+        "level": "INFO",
+        "handlers": ["txStatus_handler"],
+        "propagate": false
+    }
+},
+
+"root": {
+    "level": "DEBUG",
+    "handlers": ["console", "application_log_handler"]
+}
+}
