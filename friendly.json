@@ -1,7 +1,8 @@
 {
     "appIDs": {
         "0x10A1": "Weather",
-        "0x0573": "TxStatus"
+        "0x0573": "TxStatus",
+        "0x10A5": "GateGuard"
     },
 
     "msgTypes": {
@@ -10,10 +11,13 @@
         },
         "TxStatus": {
             "0x0001": "Update"
+        },
+        "GateGuard": {
+            "0x0000": "Event"
         }
     },
 
     "xbees": {
-        "0x0013A20040B3F1F5": "Study"
+        "0x0013A20040B3F1F5": "Front Gate"
     }
 }

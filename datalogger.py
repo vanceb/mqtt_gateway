@@ -6,12 +6,18 @@ import logging
 import logging.config
 import requests
 
+import paho.mqtt.client as mqtt
+
 from xbee import ZigBee
 import serial
 import struct
 
 # Environment variable that indicates linked Docker container for data logging
 DOCKER_WS = 'WEATHER_LOGGER_PORT_5000_TCP'
+
+# Settings for MQTT Server
+MQTT_HOST = 'localhost'
+MQTT_PORT = 1883
 
 # Load logging config from logging.json
 def setup_logging(default_path='logging.json', default_level=logging.INFO, env_key='LOG_CFG'):
@@ -114,7 +120,7 @@ class appHandler:
         # Convert to friendly name if we have defined one
         if msgType[0:2] == "0x":
             if self.appID in friendly["msgTypes"]:
-                self.appLog.debug("Looking up msgType %s in appID %s", (msgType, self.appID))
+                self.appLog.debug("Looking up msgType %s in appID %s", msgType, self.appID)
                 if msgType in friendly["msgTypes"][self.appID]:
                     msgName = friendly["msgTypes"][self.appID][msgType]
                     self.appLog.info("Converted msgType %s to friendly name %s" % (msgType, msgName))
@@ -180,7 +186,7 @@ class msgHandler:
 
         if self.JSONFields != None:
             csv = {}
-            self.appLog.debug("Creating JSON data using the following fields: " + str(self.CSVFields))
+            self.appLog.debug("Creating JSON data using the following fields: " + str(self.JSONFields))
             for ref in self.JSONFields:
                 if ref in msg:
                     csv[ref] = msg[ref]
@@ -262,20 +268,31 @@ class txStatusHandler(msgHandler):
 class gateHandler(msgHandler):
     def __init__(self, parent):
         msgHandler.__init__(self, parent, ["0x0000"])
-        self.setCSVFields(["logtime", "millis", "watchdog_count", "battery", "solar", "gate", "movement",\
-                          "gate_triggered", "movement_triggered"])
+        self.setCSVFields(["logtime", "millis", "watchdog_count", "battery", "solar", "charging", "gate", "movement",\
+                          "trigger", "triggered_by"])
+        self.setJSONFields(["logtime", "millis", "watchdog_count", "battery", "solar", "charging", "gate", "movement",\
+                          "trigger", "triggered_by"])
 
     def decode(self, msg):
+        trigger_reasons = ["Gate Closed", "Gate Opened", "Movement Detected", "Movement Stopped", "Heartbeat"]
         try:
-            values = struct.unpack("IIHHBBBB", msg["data"])
+            values = struct.unpack("IIHHBBH", msg["data"])
             msg["millis"] = values[0]
             msg["watchdog_count"] = values[1]
             msg["battery"] = values[2]
             msg["solar"] = values[3]
             msg["gate"] = values[4]
             msg["movement"] = values[5]
-            msg["gate_triggered"] = values[6]
-            msg["movement_triggered"] = values[7]
+            msg["trigger"] = values[6]
+
+            # Do some processing of the data to provide additional information
+            # Provide a human readable trigger
+            msg["triggered_by"] = trigger_reasons[msg["trigger"]]
+            # Look at the power
+            if msg["solar"] > msg["battery"] + 5:
+                msg["charging"] = "Yes"
+            else:
+                msg["charging"] = "No"
         except:
             self.applog.error("Error decoding Gate update message. Actual length received is: " + str(len(msg["data"])))
         return self.createFields(msg)
@@ -307,6 +324,16 @@ class wsPostData():
             except:
                 return False
 
+# MQTT callbacks
+def on_connect(client, userdata, flags, rc):
+    #Subscribe to any mqtt feeds here
+    client.subscribe("GateGuard/Event")
+
+def on_message(client, userdata, msg):
+    # Do something with the incoming messages
+    datalog = logging.getLogger("data")
+    datalog.debug("Received from mqtt broker: " + msg.topic + " " + str(msg.payload))
+
 if __name__ == '__main__':
     # Configure the logs
     setup_logging(default_level=logging.DEBUG)
@@ -314,6 +341,12 @@ if __name__ == '__main__':
     datalog = logging.getLogger("data")
     datalog.info("Starting logging...")
     zbdl = zbDataLogger()
+    # Connect to the mqtt broker
+    client = mqtt.Client()
+    client.on_connect = on_connect
+    client.on_message = on_message
+    client.connect(MQTT_HOST, MQTT_PORT, 60)
+
     weatherApp = appHandler(zbdl, "0x10A1")
     weatherMsg = weatherHandler(weatherApp)
     txStatusApp = appHandler(zbdl, "0x0573")
@@ -322,9 +355,13 @@ if __name__ == '__main__':
     gateMsg = gateHandler(gateApp)
     log2ws = wsPostData(env=DOCKER_WS)
     while True:
+        client.loop()
         data = zbdl.getMsg()
         if "csv" in data:
             datalog.info(data["csv"])
         if "json" in data:
-            log2ws.postData(data["json"])
+            if data["triggered_by"] != "Heartbeat":
+                client.publish(data["appID"] + "/Event", data["json"])
+            else:
+                client.publish(data["appID"] + "/Heartbeat", data["json"])
 

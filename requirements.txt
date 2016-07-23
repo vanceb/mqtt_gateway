@@ -1,3 +1,4 @@
-pyserial
-XBee
-requests
+paho-mqtt==1.2
+pyserial==3.1.1
+requests==2.10.0
+XBee==2.2.3
