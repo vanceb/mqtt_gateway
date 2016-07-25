@@ -355,7 +355,7 @@ if __name__ == '__main__':
     gateMsg = gateHandler(gateApp)
     log2ws = wsPostData(env=DOCKER_WS)
     while True:
-        client.loop()
+        client.loop_start()
         data = zbdl.getMsg()
         if "csv" in data:
             datalog.info(data["csv"])
@@ -364,4 +364,4 @@ if __name__ == '__main__':
                 client.publish(data["appID"] + "/Event", data["json"])
             else:
                 client.publish(data["appID"] + "/Heartbeat", data["json"])
-
+    client.loop_stop()

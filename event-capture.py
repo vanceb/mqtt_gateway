@@ -3,6 +3,7 @@ import urllib.request as request
 import json
 import os
 import glob
+import shutil
 import datetime
 import time
 from queue import Queue
@@ -47,27 +48,46 @@ def frame_grabber(in_q, out_q, frameURL):
     end_grab = next_grab
     frame_interval = datetime.timedelta(seconds=1/FPS)
     while True:
-        now = datetime.datetime.now()
-        if not in_q.empty():
+        if not grabbing:
+            # Block waiting for an incoming message
+            print("Blocking waiting for a message")
             msg = in_q.get()
+            # We got a message so start a new event
+            now = datetime.datetime.now()
             print("Frame Grabber, got Message: " + str(msg))
             print(msg["logtime"])
             last_event_time = datetime.datetime.fromtimestamp(time.mktime(time.strptime(msg["logtime"], "%Y-%m-%dT%H:%M:%S.%f")))
             end_grab = last_event_time + datetime.timedelta(seconds=GRAB_FOR_SECS)
-            if not grabbing:
-                grabbing = True
-                next_grab = now
-                dt = msg["logtime"].split('T')
-                event_dir =  EVENT_DIR + '/' + '/'.join(dt)
-                os.makedirs(event_dir, exist_ok=True)
-        if now < end_grab and now >= next_grab:
+            print("End of event: " + str(end_grab))
+            grabbing = True
+            next_grab = now
+            dt = msg["logtime"].split('T')
+            event_dir =  EVENT_DIR + '/' + '/'.join(dt)
+            os.makedirs(event_dir, exist_ok=True)
+        else:
+            now = datetime.datetime.now()
+            # Check to see whether we have another message during the event
+            if not in_q.empty():
+                # We are already handling an event so extend the event time
+                msg = in_q.get()
+                print("Frame Grabber, got Message: " + str(msg))
+                last_event_time = datetime.datetime.fromtimestamp(time.mktime(time.strptime(msg["logtime"], "%Y-%m-%dT%H:%M:%S.%f")))
+                end_grab = last_event_time + datetime.timedelta(seconds=GRAB_FOR_SECS)
+                print("End of event extended: " + str(end_grab))
+
+        # Should we grab the next frame?
+        if grabbing and now > next_grab:
             # we need to get a frame
             base_filename = event_dir + "/" + str(event_seq).zfill(4)
+            print("Requesting: " + base_filename + ".jpg")
             request.urlretrieve(IMAGE_URL, base_filename + ".jpg")
+            print("Got it!")
             next_grab = next_grab + frame_interval
             event_seq += 1
 
+        # Check to see whether we should end the event
         if grabbing == True and now > end_grab:
+            print("End of event capture")
             # Finished grabbing the event
             # Signal to make video thread to do its stuff
             out_q.put(event_dir)
@@ -78,19 +98,26 @@ def frame_grabber(in_q, out_q, frameURL):
 
 def make_video(in_q):
     while True:
-        if not in_q.empty():
-            msg = in_q.get()
-            print("Got path: " + str(msg))
+        # Block waiting for an incoming message
+        msg = in_q.get()
+        print("Got path: " + str(msg))
 
-            result = call(VIDEO_CONVERT, cwd=msg)
-            if result == 0:
-                # The conversion was successful so remove the jpgs
-                files = glob.glob(msg + "/*.jpg")
-                print("Removing: " + str(files))
-                for file in files:
-                    os.remove(file)
+        # Convert video
+        result = call(VIDEO_CONVERT, cwd=msg)
+        if result == 0:
+            # The conversion was successful so move the video and remove the jpgs
+            pp = str(msg).split('/')
+            newpath = '/'.join(pp[:-1])
+            vidfile = newpath + '/' + pp[-1].split('.')[0] + ".mp4"
+            print("Moving video event file to " + vidfile)
+            os.rename(msg + "/event.mp4", vidfile)
+            shutil.rmtree(msg)
 
-        time.sleep(1)
+            #files = glob.glob(msg + "/*.jpg")
+            #print("Removing: " + str(files))
+            #for file in files:
+            #    os.remove(file)
+
 
 
 if __name__ == "__main__":
