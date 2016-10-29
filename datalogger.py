@@ -4,7 +4,6 @@ from datetime import datetime
 import json
 import logging
 import logging.config
-import requests
 
 import paho.mqtt.client as mqtt
 
@@ -12,12 +11,6 @@ from xbee import ZigBee
 import serial
 import struct
 
-# Environment variable that indicates linked Docker container for data logging
-DOCKER_WS = 'WEATHER_LOGGER_PORT_5000_TCP'
-
-# Settings for MQTT Server
-MQTT_HOST = 'localhost'
-MQTT_PORT = 1883
 
 # Load logging config from logging.json
 def setup_logging(default_path='logging.json', default_level=logging.INFO, env_key='LOG_CFG'):
@@ -295,35 +288,28 @@ class gateHandler(msgHandler):
         return self.createFields(msg)
 
 
-class wsPostData():
-    def __init__(self, ws=None, env=None, appLog=None):
-        self.appLog = appLog or logging.getLogger(__name__)
-        self.ws = ws
-        if env is not None:
-            self.appLog.info("Attempting to configure linked Web Service from: $" + env)
-            # Use Docker Linked Container environment variables for setup
-            self.env = os.environ.get(env, None)
-            if self.env is not None:
-                self.ws = "http" + self.env[3:] + "/data"
-            else:
-                self.appLog.warning("Unable to configure web service from environment variable: $" + env)
-        self.appLog.info("Configured web service: %s" % str(self.ws))
+def mqtt_connect(client):
+    # Settings for MQTT Server
+    DOCKER_MQTT_ADDR = os.environ.get('MOSQUITTO_PORT_1883_TCP_ADDR', None)
+    DOCKER_MQTT_PORT = os.environ.get('MOSQUITTO_PORT_1883_TCP_PORT', None)
 
-    def postData(self, data):
-        if self.ws is not None:
-            self.appLog.debug("Attempting to post data to: " + self.ws)
-            try:
-                r = requests.post(self.ws, data=data, headers={'content-type': 'application/json'})
-                if r.json['status'] == 'OK':
-                    return True
-                else:
-                    return False
-            except:
-                return False
+    if DOCKER_MQTT_PORT is not None and DOCKER_MQTT_ADDR is not None:
+        # We are running in a Linked Docker environment
+        # Use Docker Linked Container environment variables for setup
+        MQTT_HOST = DOCKER_MQTT_ADDR
+        MQTT_PORT = DOCKER_MQTT_PORT
+    else:
+        # Provide some fallback in case running outside Docker
+        MQTT_HOST = 'localhost'
+        MQTT_PORT = 1883
+    # Connect to the mqtt server
+    client.connect(MQTT_HOST, MQTT_PORT, 60)
 
 # MQTT callbacks
 def on_connect(client, userdata, flags, rc):
     #Subscribe to any mqtt feeds here
+    datalog = logging.getLogger('data')
+    datalog.info("Connected to MQTT Broker")
     client.subscribe("GateGuard/Event")
 
 def on_message(client, userdata, msg):
@@ -339,10 +325,11 @@ if __name__ == '__main__':
     datalog.info("Starting logging...")
     zbdl = zbDataLogger()
     # Connect to the mqtt broker
+    # Get the appropriate mqtt connection parameters
     client = mqtt.Client()
     client.on_connect = on_connect
     client.on_message = on_message
-    client.connect(MQTT_HOST, MQTT_PORT, 60)
+    mqtt_connect(client)
 
     weatherApp = appHandler(zbdl, "0x10A1")
     weatherMsg = weatherHandler(weatherApp)
@@ -350,7 +337,6 @@ if __name__ == '__main__':
     txStatusMsg = txStatusHandler(txStatusApp)
     gateApp = appHandler(zbdl, "0x10A5")
     gateMsg = gateHandler(gateApp)
-    log2ws = wsPostData(env=DOCKER_WS)
     while True:
         client.loop_start()
         data = zbdl.getMsg()
