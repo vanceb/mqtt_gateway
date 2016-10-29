@@ -12,7 +12,7 @@ Run
                     --device=/dev/ttyUSB0:/dev/ttyUSB0 \
                     --volume=/data/weather:/data \
                     --link weather-logger:weather-logger \
-                    vanceb/datalogger
+                    vanceb/mqtt_gateway
 
 Needs
 =====
