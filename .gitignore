@@ -89,4 +89,4 @@ ENV/
 .ropeproject
 
 # Logs directory
-# logs/
+logs/
