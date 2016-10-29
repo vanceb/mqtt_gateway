@@ -2,10 +2,10 @@ import paho.mqtt.client as mqtt
 import urllib.request as request
 import json
 import os
-import glob
 import shutil
 import datetime
 import time
+import urllib
 from queue import Queue
 from threading import Thread
 from subprocess import call
@@ -79,9 +79,7 @@ def frame_grabber(in_q, out_q, frameURL):
         if grabbing and now > next_grab:
             # we need to get a frame
             base_filename = event_dir + "/" + str(event_seq).zfill(4)
-            print("Requesting: " + base_filename + ".jpg")
             request.urlretrieve(IMAGE_URL, base_filename + ".jpg")
-            print("Got it!")
             next_grab = next_grab + frame_interval
             event_seq += 1
 
@@ -109,6 +107,7 @@ def make_video(in_q):
             pp = str(msg).split('/')
             newpath = '/'.join(pp[:-1])
             vidfile = newpath + '/' + pp[-1].split('.')[0] + ".mp4"
+            vidurl = "https://geo-fun.org/events/" + pp[-2] + "/" + pp[-1].split('.')[0] + ".mp4"
             print("Moving video event file to " + vidfile)
             os.rename(msg + "/event.mp4", vidfile)
             shutil.rmtree(msg)
@@ -117,6 +116,17 @@ def make_video(in_q):
             #print("Removing: " + str(files))
             #for file in files:
             #    os.remove(file)
+
+            # Notify event to IFTTT Maker channel
+            maker_url = "https://maker.ifttt.com/trigger/gate/with/key/bjS1EJTq2pcD3cCXnhZgi_"
+            print("URL: " + vidurl)
+            json_event = urllib.parse.urlencode({"value1": vidurl })
+            print("Encoded json: " + json_event)
+            json_event = json_event.encode('ascii')
+            with urllib.request.urlopen(maker_url, json_event) as f:
+                print(f.read().decode('utf-8'))
+
+
 
 
 

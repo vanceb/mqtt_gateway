@@ -268,31 +268,28 @@ class txStatusHandler(msgHandler):
 class gateHandler(msgHandler):
     def __init__(self, parent):
         msgHandler.__init__(self, parent, ["0x0000"])
-        self.setCSVFields(["logtime", "millis", "watchdog_count", "battery", "solar", "charging", "gate", "movement",\
+        self.setCSVFields(["logtime", "millis", "watchdog_count", "battery", "solar", "charge", "gate", "movement",\
                           "trigger", "triggered_by"])
-        self.setJSONFields(["logtime", "millis", "watchdog_count", "battery", "solar", "charging", "gate", "movement",\
+        self.setJSONFields(["logtime", "millis", "watchdog_count", "battery", "solar", "charge", "gate", "movement",\
                           "trigger", "triggered_by"])
 
     def decode(self, msg):
         trigger_reasons = ["Gate Closed", "Gate Opened", "Movement Detected", "Movement Stopped", "Heartbeat"]
+        charge_states = ["sleeping", "charging", "full", "error"]
         try:
-            values = struct.unpack("IIHHBBH", msg["data"])
+            values = struct.unpack("IIHHBBBB", msg["data"])
             msg["millis"] = values[0]
             msg["watchdog_count"] = values[1]
             msg["battery"] = values[2]
             msg["solar"] = values[3]
-            msg["gate"] = values[4]
-            msg["movement"] = values[5]
-            msg["trigger"] = values[6]
+            msg["charge"] = charge_states[values[4]]
+            msg["gate"] = values[5]
+            msg["movement"] = values[6]
+            msg["trigger"] = values[7]
 
             # Do some processing of the data to provide additional information
             # Provide a human readable trigger
             msg["triggered_by"] = trigger_reasons[msg["trigger"]]
-            # Look at the power
-            if msg["solar"] > msg["battery"] + 5:
-                msg["charging"] = "Yes"
-            else:
-                msg["charging"] = "No"
         except:
             self.applog.error("Error decoding Gate update message. Actual length received is: " + str(len(msg["data"])))
         return self.createFields(msg)
