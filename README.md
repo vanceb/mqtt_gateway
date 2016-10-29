@@ -11,6 +11,7 @@ Run
                     --name mqtt_gateway \
                     --device=/dev/ttyUSB0:/dev/ttyUSB0 \
                     --volume=/data/weather:/data \
+                    --link mosquitto:mosquitto
                     vanceb/mqtt_gateway
 
 Needs
