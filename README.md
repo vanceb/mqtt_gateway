@@ -1,3 +1,6 @@
+# Project Archived
+This code has been incorporated into a borader home automation prokject on gitlab [https://gitlab.com/vanceb/home_automation](https://gitlab.com/vanceb/home_automation)
+
 # Merged into broader cctv project - no updates here
 
 Build
